@@ -86,6 +86,168 @@ class LauncherController(context: Context) {
         uiState = uiState.copy(screen = LauncherScreen.SnakeGame(nextState))
     }
 
+    // --- Direct Touch-First Actions ---
+
+    fun goHome() {
+        uiState = uiState.copy(
+            screen = LauncherScreen.Home,
+            filteredApps = uiState.allApps,
+        )
+    }
+
+    fun openDrawerWithQuery(query: String = "", assignDigit: Int? = null) {
+        openAppDrawer(query = query, assignDigit = assignDigit)
+    }
+
+    fun appendT9Digit(digit: Int) {
+        when (val current = uiState.screen) {
+            is LauncherScreen.AppDrawer -> {
+                val next = (current.t9Query + digit.toString()).take(12)
+                updateAppDrawerQuery(current, next)
+            }
+
+            is LauncherScreen.Dialer -> {
+                uiState = uiState.copy(screen = LauncherScreen.Dialer((current.digits + digit.toString()).take(20)))
+            }
+
+            else -> {
+                openAppDrawer(query = digit.toString())
+            }
+        }
+    }
+
+    fun backspaceT9() {
+        when (val current = uiState.screen) {
+            is LauncherScreen.AppDrawer -> {
+                if (current.t9Query.isNotEmpty()) {
+                    updateAppDrawerQuery(current, current.t9Query.dropLast(1))
+                } else {
+                    goHome()
+                }
+            }
+
+            is LauncherScreen.Dialer -> {
+                val next = current.digits.dropLast(1)
+                uiState = if (next.isEmpty()) {
+                    uiState.copy(screen = LauncherScreen.Home)
+                } else {
+                    uiState.copy(screen = LauncherScreen.Dialer(next))
+                }
+            }
+
+            else -> Unit
+        }
+    }
+
+    fun clearT9() {
+        when (val current = uiState.screen) {
+            is LauncherScreen.AppDrawer -> updateAppDrawerQuery(current, "")
+            is LauncherScreen.Dialer -> uiState = uiState.copy(screen = LauncherScreen.Home)
+            else -> Unit
+        }
+    }
+
+    fun launchAppDirect(app: InstalledApp) {
+        val current = uiState.screen
+        if (current is LauncherScreen.AppDrawer && current.assignDigit != null) {
+            preferences.setSpeedDial(current.assignDigit, app.packageName)
+            uiState = uiState.copy(
+                speedDials = preferences.getSpeedDials(),
+                screen = LauncherScreen.SpeedDialManager(current.assignDigit),
+            )
+            showBanner("KEY ${current.assignDigit} -> ${app.label.uppercase(Locale.US)}")
+            return
+        }
+        val launched = appRepository.launchApp(app.packageName)
+        if (!launched) {
+            showBanner("CANNOT OPEN APP")
+        }
+    }
+
+    fun togglePinAppDirect(app: InstalledApp) {
+        val isPinned = preferences.togglePinnedPackage(app.packageName)
+        refreshApps()
+        showBanner(if (isPinned) "PINNED: ${app.label.uppercase(Locale.US)}" else "UNPINNED: ${app.label.uppercase(Locale.US)}")
+    }
+
+    fun openAppInfoDirect(app: InstalledApp) {
+        appRepository.openAppDetails(app.packageName)
+    }
+
+    fun toggleTorchDirect() {
+        val on = hardwareController.toggleTorch()
+        refreshClockAndStatus()
+        showBanner(if (on) "TORCH ON" else "TORCH OFF")
+    }
+
+    fun toggleVibrateDirect() {
+        val profile = hardwareController.toggleVibrateMode()
+        refreshClockAndStatus()
+        val text = when (profile) {
+            RingerProfile.VIBRATE -> "PROFILE: VIBRATE"
+            RingerProfile.SILENT -> "PROFILE: SILENT"
+            RingerProfile.NORMAL -> "PROFILE: RING"
+        }
+        showBanner(text)
+    }
+
+    fun cycleThemeDirect() {
+        val themes = LcdTheme.entries
+        val next = themes[(themes.indexOf(uiState.theme) + 1) % themes.size]
+        preferences.themeId = next.id
+        uiState = uiState.copy(theme = next)
+        showBanner("LCD: ${next.displayName.uppercase(Locale.US)}")
+    }
+
+    fun selectThemeDirect(theme: LcdTheme) {
+        preferences.themeId = theme.id
+        uiState = uiState.copy(theme = theme, screen = LauncherScreen.Home)
+        showBanner("LCD: ${theme.displayName.uppercase(Locale.US)}")
+    }
+
+    fun cycleCarrierDirect() {
+        val carriers = listOf("GOBLINS", "GOBLIN-NET", "PIXEL 10A", "1280-OS")
+        val current = preferences.carrierOverride
+        val next = carriers[(carriers.indexOf(current) + 1) % carriers.size]
+        preferences.carrierOverride = next
+        refreshClockAndStatus()
+        showBanner("BANNER: $next")
+    }
+
+    fun openDialerDirect(number: String = "") {
+        appRepository.openDialer(number)
+    }
+
+    fun openDialerScreen(initialDigits: String = "") {
+        uiState = uiState.copy(screen = LauncherScreen.Dialer(initialDigits))
+    }
+
+    fun openSnakeDirect() {
+        startSnakeGame()
+    }
+
+    fun steerSnakeDirect(direction: Direction) {
+        val game = (uiState.screen as? LauncherScreen.SnakeGame)?.gameState ?: return
+        steerSnake(game, direction)
+    }
+
+    fun toggleSnakePauseOrRestart() {
+        val game = (uiState.screen as? LauncherScreen.SnakeGame)?.gameState ?: return
+        if (game.isGameOver) {
+            startSnakeGame()
+        } else {
+            uiState = uiState.copy(screen = LauncherScreen.SnakeGame(game.copy(isPaused = !game.isPaused)))
+        }
+    }
+
+    fun openSettingsDirect() {
+        uiState = uiState.copy(screen = LauncherScreen.SettingsMenu(0))
+    }
+
+    fun openDefaultHomeDirect() {
+        appRepository.openDefaultHomeSettings()
+    }
+
     fun onKeyPress(key: KeypadKey) {
         if (uiState.isKeypadLocked) {
             handleLockedKeyPress(key)
@@ -120,9 +282,7 @@ class LauncherController(context: Context) {
         when (key) {
             is KeypadKey.Digit -> {
                 if (key.digit == 0) {
-                    val torchOn = hardwareController.toggleTorch()
-                    refreshClockAndStatus()
-                    showBanner(if (torchOn) "GOBLIN TORCH ON" else "GOBLIN TORCH OFF")
+                    toggleTorchDirect()
                 } else if (key.digit == 1) {
                     openAppDrawer()
                 } else if (key.digit in 2..9) {
@@ -131,19 +291,16 @@ class LauncherController(context: Context) {
             }
 
             KeypadKey.Pound -> {
-                val profile = hardwareController.toggleVibrateMode()
-                refreshClockAndStatus()
-                val text = when (profile) {
-                    RingerProfile.VIBRATE -> "PROFILE: VIBRATE"
-                    RingerProfile.SILENT -> "PROFILE: SILENT"
-                    RingerProfile.NORMAL -> "PROFILE: GENERAL"
-                }
-                showBanner(text)
+                toggleVibrateDirect()
             }
 
             KeypadKey.Star -> {
-                uiState = uiState.copy(screen = LauncherScreen.Home, isKeypadLocked = true)
-                showBanner("KEYPAD LOCKED")
+                val drawer = uiState.screen as? LauncherScreen.AppDrawer
+                if (drawer != null && drawer.t9Query.isNotEmpty()) {
+                    clearT9()
+                } else {
+                    openDialerScreen()
+                }
             }
 
             KeypadKey.NavCenter, KeypadKey.SoftLeft -> {
@@ -163,7 +320,7 @@ class LauncherController(context: Context) {
             }
 
             KeypadKey.EndPower -> {
-                uiState = uiState.copy(screen = LauncherScreen.Home)
+                goHome()
             }
 
             else -> onKeyPress(key)
@@ -172,7 +329,7 @@ class LauncherController(context: Context) {
 
     fun onBackPressed() {
         if (uiState.isKeypadLocked) {
-            showBanner("HOLD * TO UNLOCK")
+            uiState = uiState.copy(isKeypadLocked = false)
             return
         }
         when (val screen = uiState.screen) {
@@ -184,18 +341,11 @@ class LauncherController(context: Context) {
                 } else if (screen.t9Query.isNotEmpty()) {
                     updateAppDrawerQuery(screen, screen.t9Query.dropLast(1))
                 } else {
-                    uiState = uiState.copy(screen = LauncherScreen.Home)
+                    goHome()
                 }
             }
 
-            is LauncherScreen.ThemePicker,
-            is LauncherScreen.SpeedDialManager,
-            is LauncherScreen.SettingsMenu,
-            is LauncherScreen.SnakeGame -> {
-                uiState = uiState.copy(screen = LauncherScreen.MainMenu(0))
-            }
-
-            else -> uiState = uiState.copy(screen = LauncherScreen.Home)
+            else -> goHome()
         }
     }
 
@@ -233,8 +383,7 @@ class LauncherController(context: Context) {
             }
 
             KeypadKey.NavRight -> {
-                val currentIdx = LcdTheme.entries.indexOf(uiState.theme).coerceAtLeast(0)
-                uiState = uiState.copy(screen = LauncherScreen.ThemePicker(currentIdx))
+                cycleThemeDirect()
             }
 
             KeypadKey.Call -> {
@@ -242,15 +391,15 @@ class LauncherController(context: Context) {
             }
 
             is KeypadKey.Digit -> {
-                uiState = uiState.copy(screen = LauncherScreen.Dialer(key.digit.toString()))
+                openAppDrawer(query = key.digit.toString())
             }
 
             KeypadKey.Star -> {
-                uiState = uiState.copy(screen = LauncherScreen.Dialer("*"))
+                openDialerScreen()
             }
 
             KeypadKey.Pound -> {
-                uiState = uiState.copy(screen = LauncherScreen.Dialer("#"))
+                openAppDrawer()
             }
 
             KeypadKey.EndPower -> Unit
@@ -280,7 +429,7 @@ class LauncherController(context: Context) {
             }
 
             KeypadKey.SoftRight, KeypadKey.EndPower -> {
-                uiState = uiState.copy(screen = LauncherScreen.Home)
+                goHome()
             }
 
             else -> Unit
@@ -291,24 +440,10 @@ class LauncherController(context: Context) {
         when (item) {
             MainMenuItem.APPS -> openAppDrawer()
             MainMenuItem.SNAKE -> startSnakeGame()
-            MainMenuItem.FLASHLIGHT -> {
-                val on = hardwareController.toggleTorch()
-                refreshClockAndStatus()
-                showBanner(if (on) "GOBLIN TORCH ON" else "GOBLIN TORCH OFF")
-            }
-
-            MainMenuItem.THEMES -> {
-                val idx = LcdTheme.entries.indexOf(uiState.theme).coerceAtLeast(0)
-                uiState = uiState.copy(screen = LauncherScreen.ThemePicker(idx))
-            }
-
-            MainMenuItem.SPEED_DIAL -> {
-                uiState = uiState.copy(screen = LauncherScreen.SpeedDialManager(2))
-            }
-
-            MainMenuItem.SETTINGS -> {
-                uiState = uiState.copy(screen = LauncherScreen.SettingsMenu(0))
-            }
+            MainMenuItem.FLASHLIGHT -> toggleTorchDirect()
+            MainMenuItem.THEMES -> cycleThemeDirect()
+            MainMenuItem.SPEED_DIAL -> uiState = uiState.copy(screen = LauncherScreen.SpeedDialManager(2))
+            MainMenuItem.SETTINGS -> uiState = uiState.copy(screen = LauncherScreen.SettingsMenu(0))
         }
     }
 
@@ -331,40 +466,15 @@ class LauncherController(context: Context) {
 
             KeypadKey.NavCenter, KeypadKey.SoftLeft, KeypadKey.Call -> {
                 val selected = list.getOrNull(screen.selectedIndex) ?: return
-                if (screen.assignDigit != null) {
-                    preferences.setSpeedDial(screen.assignDigit, selected.packageName)
-                    uiState = uiState.copy(
-                        speedDials = preferences.getSpeedDials(),
-                        screen = LauncherScreen.SpeedDialManager(screen.assignDigit),
-                    )
-                    showBanner("KEY ${screen.assignDigit} -> ${selected.label.uppercase(Locale.US)}")
-                } else {
-                    val launched = appRepository.launchApp(selected.packageName)
-                    if (!launched) showBanner("CANNOT OPEN APP")
-                }
+                launchAppDirect(selected)
             }
 
             KeypadKey.SoftRight -> {
-                if (screen.t9Query.isNotEmpty()) {
-                    updateAppDrawerQuery(screen, screen.t9Query.dropLast(1))
-                } else {
-                    val selected = list.getOrNull(screen.selectedIndex)
-                    if (selected != null && screen.assignDigit == null) {
-                        uiState = uiState.copy(
-                            screen = LauncherScreen.AppOptions(
-                                app = selected,
-                                selectedOptionIndex = 0,
-                                returnQuery = screen.t9Query,
-                            )
-                        )
-                    } else {
-                        onBackPressed()
-                    }
-                }
+                backspaceT9()
             }
 
             KeypadKey.EndPower -> {
-                uiState = uiState.copy(screen = LauncherScreen.Home)
+                goHome()
             }
 
             is KeypadKey.Digit -> {
@@ -374,17 +484,15 @@ class LauncherController(context: Context) {
 
             KeypadKey.Star -> {
                 if (screen.t9Query.isNotEmpty()) {
-                    updateAppDrawerQuery(screen, "")
+                    backspaceT9()
                 } else {
-                    uiState = uiState.copy(screen = LauncherScreen.Home)
+                    goHome()
                 }
             }
 
             KeypadKey.Pound -> {
-                val selected = list.getOrNull(screen.selectedIndex) ?: return
-                val isPinned = preferences.togglePinnedPackage(selected.packageName)
-                refreshApps()
-                showBanner(if (isPinned) "PINNED TOP" else "UNPINNED")
+                val selected = list.getOrNull(0) ?: return
+                launchAppDirect(selected)
             }
         }
     }
@@ -406,14 +514,12 @@ class LauncherController(context: Context) {
                 when (screen.selectedOptionIndex) {
                     0 -> {
                         appRepository.launchApp(screen.app.packageName)
-                        uiState = uiState.copy(screen = LauncherScreen.Home)
+                        goHome()
                     }
 
                     1 -> {
-                        val pinned = preferences.togglePinnedPackage(screen.app.packageName)
-                        refreshApps()
+                        togglePinAppDirect(screen.app)
                         openAppDrawer(query = screen.returnQuery)
-                        showBanner(if (pinned) "PINNED TO TOP" else "UNPINNED")
                     }
 
                     2 -> {
@@ -427,7 +533,7 @@ class LauncherController(context: Context) {
             }
 
             KeypadKey.SoftRight -> openAppDrawer(query = screen.returnQuery)
-            KeypadKey.EndPower -> uiState = uiState.copy(screen = LauncherScreen.Home)
+            KeypadKey.EndPower -> goHome()
             else -> Unit
         }
     }
@@ -439,11 +545,11 @@ class LauncherController(context: Context) {
             }
 
             KeypadKey.Star -> {
-                uiState = uiState.copy(screen = LauncherScreen.Dialer((screen.digits + "*").take(20)))
+                backspaceT9()
             }
 
             KeypadKey.Pound -> {
-                uiState = uiState.copy(screen = LauncherScreen.Dialer((screen.digits + "#").take(20)))
+                appRepository.openDialer(screen.digits)
             }
 
             KeypadKey.SoftLeft, KeypadKey.NavCenter, KeypadKey.Call -> {
@@ -451,16 +557,11 @@ class LauncherController(context: Context) {
             }
 
             KeypadKey.SoftRight -> {
-                val next = screen.digits.dropLast(1)
-                uiState = if (next.isEmpty()) {
-                    uiState.copy(screen = LauncherScreen.Home)
-                } else {
-                    uiState.copy(screen = LauncherScreen.Dialer(next))
-                }
+                backspaceT9()
             }
 
             KeypadKey.EndPower -> {
-                uiState = uiState.copy(screen = LauncherScreen.Home)
+                goHome()
             }
 
             else -> Unit
@@ -483,22 +584,12 @@ class LauncherController(context: Context) {
                 }
             }
 
-            KeypadKey.NavCenter, KeypadKey.SoftLeft -> {
-                if (game.isGameOver) {
-                    startSnakeGame()
-                } else {
-                    uiState = uiState.copy(
-                        screen = LauncherScreen.SnakeGame(game.copy(isPaused = !game.isPaused))
-                    )
-                }
+            KeypadKey.NavCenter, KeypadKey.SoftLeft, KeypadKey.Pound -> {
+                toggleSnakePauseOrRestart()
             }
 
-            KeypadKey.SoftRight -> {
-                uiState = uiState.copy(screen = LauncherScreen.MainMenu(1))
-            }
-
-            KeypadKey.EndPower -> {
-                uiState = uiState.copy(screen = LauncherScreen.Home)
+            KeypadKey.SoftRight, KeypadKey.Star, KeypadKey.EndPower -> {
+                goHome()
             }
 
             else -> Unit
@@ -526,18 +617,10 @@ class LauncherController(context: Context) {
             }
 
             KeypadKey.NavCenter, KeypadKey.SoftLeft -> {
-                val chosen = themes[screen.selectedIndex]
-                preferences.themeId = chosen.id
-                uiState = uiState.copy(theme = chosen, screen = LauncherScreen.MainMenu(3))
-                showBanner("THEME: ${chosen.displayName.uppercase(Locale.US)}")
+                selectThemeDirect(themes[screen.selectedIndex])
             }
 
-            KeypadKey.SoftRight -> {
-                val saved = LcdTheme.fromId(preferences.themeId)
-                uiState = uiState.copy(theme = saved, screen = LauncherScreen.MainMenu(3))
-            }
-
-            KeypadKey.EndPower -> {
+            KeypadKey.SoftRight, KeypadKey.EndPower, KeypadKey.Star -> {
                 val saved = LcdTheme.fromId(preferences.themeId)
                 uiState = uiState.copy(theme = saved, screen = LauncherScreen.Home)
             }
@@ -560,7 +643,7 @@ class LauncherController(context: Context) {
 
             is KeypadKey.Digit -> {
                 if (key.digit in 2..9) {
-                    uiState = uiState.copy(screen = screen.copy(selectedDigit = key.digit))
+                    openAppDrawer(assignDigit = key.digit)
                 }
             }
 
@@ -568,18 +651,8 @@ class LauncherController(context: Context) {
                 openAppDrawer(assignDigit = screen.selectedDigit)
             }
 
-            KeypadKey.SoftRight -> {
-                if (uiState.speedDials.containsKey(screen.selectedDigit)) {
-                    preferences.setSpeedDial(screen.selectedDigit, null)
-                    uiState = uiState.copy(speedDials = preferences.getSpeedDials())
-                    showBanner("KEY ${screen.selectedDigit} CLEARED")
-                } else {
-                    uiState = uiState.copy(screen = LauncherScreen.MainMenu(4))
-                }
-            }
-
-            KeypadKey.EndPower -> {
-                uiState = uiState.copy(screen = LauncherScreen.Home)
+            KeypadKey.SoftRight, KeypadKey.Star, KeypadKey.EndPower -> {
+                goHome()
             }
 
             else -> Unit
@@ -587,44 +660,21 @@ class LauncherController(context: Context) {
     }
 
     private fun handleSettingsKey(screen: LauncherScreen.SettingsMenu, key: KeypadKey) {
-        val optionsCount = 4
         when (key) {
-            KeypadKey.NavUp, KeypadKey.NavLeft -> {
-                val prev = if (screen.selectedOptionIndex - 1 < 0) optionsCount - 1 else screen.selectedOptionIndex - 1
-                uiState = uiState.copy(screen = screen.copy(selectedIndex = prev))
-            }
-
-            KeypadKey.NavDown, KeypadKey.NavRight -> {
-                val next = (screen.selectedOptionIndex + 1) % optionsCount
-                uiState = uiState.copy(screen = screen.copy(selectedIndex = next))
-            }
-
-            KeypadKey.NavCenter, KeypadKey.SoftLeft -> {
-                when (screen.selectedOptionIndex) {
-                    0 -> appRepository.openDefaultHomeSettings()
-                    1 -> {
+            is KeypadKey.Digit -> {
+                when (key.digit) {
+                    1 -> appRepository.openDefaultHomeSettings()
+                    2 -> {
                         refreshApps()
                         showBanner("RELOADED ${uiState.allApps.size} APPS")
                     }
 
-                    2 -> {
-                        val carriers = listOf("GOBLINS", "GOBLIN-NET", "PIXEL 10A", "1280-OS")
-                        val current = preferences.carrierOverride
-                        val next = carriers[(carriers.indexOf(current) + 1) % carriers.size]
-                        preferences.carrierOverride = next
-                        refreshClockAndStatus()
-                        showBanner("BANNER: $next")
-                    }
-
-                    3 -> {
-                        uiState = uiState.copy(screen = LauncherScreen.Home, isKeypadLocked = true)
-                        showBanner("KEYPAD LOCKED")
-                    }
+                    3 -> cycleCarrierDirect()
+                    4 -> cycleThemeDirect()
                 }
             }
 
-            KeypadKey.SoftRight -> uiState = uiState.copy(screen = LauncherScreen.MainMenu(5))
-            KeypadKey.EndPower -> uiState = uiState.copy(screen = LauncherScreen.Home)
+            KeypadKey.SoftRight, KeypadKey.Star, KeypadKey.EndPower -> goHome()
             else -> Unit
         }
     }
@@ -638,7 +688,7 @@ class LauncherController(context: Context) {
             }
         } else {
             openAppDrawer(assignDigit = digit)
-            showBanner("PICK APP FOR KEY $digit")
+            showBanner("TAP APP FOR KEY $digit")
         }
     }
 
@@ -668,7 +718,7 @@ class LauncherController(context: Context) {
     private fun startSnakeGame() {
         val initial = SnakeEngine.initialState(
             width = 20,
-            height = 10,
+            height = 12,
             highScore = preferences.highScoreSnake,
             randomSeed = System.currentTimeMillis(),
         )
@@ -696,9 +746,6 @@ class LauncherController(context: Context) {
             uiState = uiState.copy(bannerMessage = null)
         }
         bannerClearRunnable = clearTask
-        mainHandler.postDelayed(clearTask, 1800L)
+        mainHandler.postDelayed(clearTask, 1500L)
     }
 }
-
-private val LauncherScreen.SettingsMenu.selectedOptionIndex: Int
-    get() = selectedIndex

@@ -1,8 +1,12 @@
 package com.goblins.launcher1280.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,197 +20,251 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.goblins.launcher1280.analysis.Direction
+import com.goblins.launcher1280.backend.InstalledApp
 import com.goblins.launcher1280.backend.RingerProfile
+import com.goblins.launcher1280.model.LauncherController
 import com.goblins.launcher1280.model.LauncherScreen
 import com.goblins.launcher1280.model.LauncherUiState
 import com.goblins.launcher1280.model.LcdTheme
-import com.goblins.launcher1280.model.MainMenuItem
+import kotlin.math.abs
 
 @Composable
-fun GoblinsLcdAssembly(state: LauncherUiState, modifier: Modifier = Modifier) {
-    val chassis = Color(0xFF282A29)
+fun GoblinsLcdAssembly(
+    state: LauncherUiState,
+    controller: LauncherController,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(30.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF454744), chassis, Color(0xFF1E201F))))
-            .border(1.dp, Color(0xFF555852), RoundedCornerShape(30.dp))
-            .padding(horizontal = 18.dp, vertical = 13.dp),
+            .clip(RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp, bottomStart = 18.dp, bottomEnd = 18.dp))
+            .background(Brush.verticalGradient(listOf(Color(0xFF232824), Color(0xFF141816))))
+            .border(
+                width = 1.5.dp,
+                color = state.theme.bezelRing,
+                shape = RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
+            )
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        SpeakerCameraDeck()
-        Spacer(Modifier.height(5.dp))
-        GoblinsBadge()
-        Spacer(Modifier.height(9.dp))
-
-        Column(
+        Pixel10aCameraSpeakerHeader(
+            onCycleTheme = controller::cycleThemeDirect,
+            onOpenSettings = controller::openSettingsDirect,
+        )
+        Spacer(Modifier.height(6.dp))
+        LcdTouchGlass(
+            state = state,
+            controller = controller,
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
-                .clip(RoundedCornerShape(19.dp))
-                .background(Color(0xFF111411))
-                .border(2.dp, state.theme.bezelRing, RoundedCornerShape(19.dp))
-                .padding(7.dp),
-        ) {
-            LcdGlass(state, Modifier.fillMaxSize())
-        }
+                .weight(1f),
+        )
     }
 }
 
 @Composable
-private fun SpeakerCameraDeck() {
-    Box(
+private fun Pixel10aCameraSpeakerHeader(
+    onCycleTheme: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(30.dp),
-        contentAlignment = Alignment.Center,
+            .height(34.dp)
+            .padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val centerX = size.width / 2f
-            val centerY = size.height / 2f
-            val slotColor = Color(0xFF111312)
-            val slotWidth = size.width * 0.19f
-            val gap = size.width * 0.095f
-            for (row in -1..1) {
-                val y = centerY + row * 4.dp.toPx()
-                drawRoundRect(
-                    color = slotColor,
-                    topLeft = Offset(centerX - gap - slotWidth, y - 1.dp.toPx()),
-                    size = Size(slotWidth, 2.dp.toPx()),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
-                )
-                drawRoundRect(
-                    color = slotColor,
-                    topLeft = Offset(centerX + gap, y - 1.dp.toPx()),
-                    size = Size(slotWidth, 2.dp.toPx()),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
-                )
-            }
-        }
+        // Left: GOBLINS metallic mini-badge (tap to cycle LCD backlight theme)
         Box(
             modifier = Modifier
-                .size(27.dp)
-                .clip(CircleShape)
-                .background(Brush.radialGradient(listOf(Color(0xFF555A56), Color(0xFF171A19))))
-                .border(2.dp, Color(0xFF858983), CircleShape)
-                .padding(4.dp)
-                .clip(CircleShape)
-                .background(Brush.radialGradient(listOf(Color(0xFF192B31), Color(0xFF050708))))
-                .border(1.dp, Color(0xFF303A3C), CircleShape),
-        )
-    }
-}
-
-@Composable
-private fun GoblinsBadge() {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(5.dp))
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFFE2E3D8), Color(0xFF858981), Color(0xFF3A3E3A)),
-                ),
+                .clip(RoundedCornerShape(4.dp))
+                .background(Brush.verticalGradient(listOf(Color(0xFFD5D8CE), Color(0xFF7B8077))))
+                .clickable(onClick = onCycleTheme)
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+        ) {
+            Text(
+                text = "GOBLINS",
+                color = Color(0xFF141715),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.8.sp,
+                fontFamily = FontFamily.Monospace,
             )
-            .border(1.dp, Color(0xFFB7B9AF), RoundedCornerShape(5.dp))
-            .padding(horizontal = 20.dp, vertical = 3.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "GOBLINS",
-            color = Color(0xFF20231F),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 3.sp,
-            fontFamily = FontFamily.Monospace,
-        )
+        }
+
+        // Center: Pixel 10a circular camera punch-hole ring + speaker slots
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(32.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                val centerX = size.width / 2f
+                val centerY = size.height / 2f
+                val slotColor = Color(0xFF0A0C0B)
+                val slotWidth = size.width * 0.20f
+                val gap = 22.dp.toPx()
+                for (row in -1..1) {
+                    val y = centerY + row * 4.dp.toPx()
+                    drawRoundRect(
+                        color = slotColor,
+                        topLeft = Offset(centerX - gap - slotWidth, y - 1.dp.toPx()),
+                        size = Size(slotWidth, 2.dp.toPx()),
+                        cornerRadius = CornerRadius(2.dp.toPx()),
+                    )
+                    drawRoundRect(
+                        color = slotColor,
+                        topLeft = Offset(centerX + gap, y - 1.dp.toPx()),
+                        size = Size(slotWidth, 2.dp.toPx()),
+                        cornerRadius = CornerRadius(2.dp.toPx()),
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(Color(0xFF4B524D), Color(0xFF121513))))
+                    .border(1.5.dp, Color(0xFF7C837C), CircleShape)
+                    .padding(3.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF050606)),
+            )
+        }
+
+        // Right: Model tag (tap for setup/settings)
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .border(1.dp, Color(0xFF565C56), RoundedCornerShape(4.dp))
+                .clickable(onClick = onOpenSettings)
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+        ) {
+            Text(
+                text = "1280·OS",
+                color = Color(0xFFB4BBB2),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.2.sp,
+                fontFamily = FontFamily.Monospace,
+            )
+        }
     }
 }
 
 @Composable
-private fun LcdGlass(state: LauncherUiState, modifier: Modifier = Modifier) {
+private fun LcdTouchGlass(
+    state: LauncherUiState,
+    controller: LauncherController,
+    modifier: Modifier = Modifier,
+) {
     val theme = state.theme
     Box(
         modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(theme.lcdLit),
+            .clip(RoundedCornerShape(14.dp))
+            .background(theme.lcdLit)
+            .border(2.dp, theme.lcdInk.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
     ) {
+        // Subtle monochrome LCD scanline & dot texture
         Canvas(Modifier.fillMaxSize()) {
-            val spacing = 5.dp.toPx()
-            var y = 1.dp.toPx()
+            val step = 6.dp.toPx()
+            var y = 2.dp.toPx()
             while (y < size.height) {
-                var x = 1.dp.toPx()
-                while (x < size.width) {
-                    drawCircle(
-                        color = theme.lcdGhost.copy(alpha = 0.21f),
-                        radius = 0.65.dp.toPx(),
-                        center = Offset(x, y),
-                    )
-                    x += spacing
-                }
-                y += spacing
-            }
-            var scanY = 3.dp.toPx()
-            while (scanY < size.height) {
                 drawLine(
-                    color = theme.lcdInk.copy(alpha = 0.035f),
-                    start = Offset(0f, scanY),
-                    end = Offset(size.width, scanY),
-                    strokeWidth = 0.6.dp.toPx(),
+                    color = theme.lcdInk.copy(alpha = 0.04f),
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    strokeWidth = 0.7.dp.toPx(),
                 )
-                scanY += 4.dp.toPx()
+                y += step
             }
         }
 
-        Column(Modifier.fillMaxSize().padding(horizontal = 7.dp, vertical = 5.dp)) {
-            StatusRow(state)
-            Spacer(Modifier.height(2.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+        ) {
+            TopStatusStrip(state, controller)
+            Spacer(Modifier.height(6.dp))
+
             Row(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 SignalTower(state.systemStatus.signalBars, theme)
-                ScreenContent(state, Modifier.weight(1f).fillMaxHeight())
-                BatteryTower(state.systemStatus.batteryBars, state.systemStatus.isCharging, theme)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(horizontal = 6.dp),
+                ) {
+                    when (val screen = state.screen) {
+                        LauncherScreen.Home -> TouchHomeContent(state, controller)
+                        is LauncherScreen.AppDrawer -> TouchAppDrawerContent(screen, state, controller)
+                        is LauncherScreen.Dialer -> TouchDialerContent(screen.digits, state, controller)
+                        is LauncherScreen.SnakeGame -> TouchSnakeContent(screen.gameState, theme, controller)
+                        is LauncherScreen.SettingsMenu -> TouchSettingsContent(state, controller)
+                        is LauncherScreen.SpeedDialManager -> TouchSpeedDialContent(state, controller)
+                        else -> TouchHomeContent(state, controller)
+                    }
+                }
+                BatteryTower(
+                    bars = state.systemStatus.batteryBars,
+                    percent = state.systemStatus.batteryPercent,
+                    charging = state.systemStatus.isCharging,
+                    theme = theme,
+                )
             }
-            SoftKeyRow(state)
+
+            Spacer(Modifier.height(6.dp))
+            BottomTouchActionStrip(state, controller)
         }
 
         state.bannerMessage?.let { message ->
             Box(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .fillMaxWidth(0.82f)
+                    .align(Alignment.TopCenter)
+                    .padding(top = 36.dp)
                     .clip(RoundedCornerShape(4.dp))
                     .background(theme.lcdInk)
-                    .border(2.dp, theme.lcdLit, RoundedCornerShape(4.dp))
-                    .padding(horizontal = 10.dp, vertical = 12.dp),
+                    .border(1.5.dp, theme.lcdLit, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 LcdText(
                     text = message,
                     color = theme.lcdLit,
-                    size = 14,
+                    size = 12,
                     weight = FontWeight.Bold,
                     align = TextAlign.Center,
                 )
@@ -216,199 +274,409 @@ private fun LcdGlass(state: LauncherUiState, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun StatusRow(state: LauncherUiState) {
+private fun TopStatusStrip(
+    state: LauncherUiState,
+    controller: LauncherController,
+) {
     val theme = state.theme
     Row(
-        modifier = Modifier.fillMaxWidth().height(21.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, theme.lcdInk.copy(alpha = 0.25f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         LcdText(
-            text = state.systemStatus.carrierLabel.uppercase(),
+            text = "⌁ ${state.systemStatus.carrierLabel.uppercase()}",
             color = theme.lcdInk,
-            size = 9,
+            size = 11,
+            weight = FontWeight.Bold,
+            modifier = Modifier.clickable { controller.cycleCarrierDirect() },
+            maxLines = 1,
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            LcdChip(
+                text = if (state.systemStatus.torchEnabled) "TORCH:ON" else "TORCH",
+                inverted = state.systemStatus.torchEnabled,
+                theme = theme,
+                onClick = controller::toggleTorchDirect,
+            )
+            LcdChip(
+                text = when (state.systemStatus.ringerProfile) {
+                    RingerProfile.VIBRATE -> "VIB"
+                    RingerProfile.SILENT -> "SILENT"
+                    RingerProfile.NORMAL -> "RING"
+                },
+                inverted = state.systemStatus.ringerProfile != RingerProfile.NORMAL,
+                theme = theme,
+                onClick = controller::toggleVibrateDirect,
+            )
+            LcdChip(
+                text = "THEME",
+                inverted = false,
+                theme = theme,
+                onClick = controller::cycleThemeDirect,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ColumnScope.TouchHomeContent(
+    state: LauncherUiState,
+    controller: LauncherController,
+) {
+    val theme = state.theme
+    val haptics = LocalHapticFeedback.current
+
+    // Big Minimal Retro Clock & Date Banner (Tap clock -> All Apps, Long-press -> Settings)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .combinedClickable(
+                onClick = { controller.openDrawerWithQuery("") },
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    controller.openSettingsDirect()
+                },
+            )
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        LcdText(
+            text = state.timeText,
+            color = theme.lcdInk,
+            size = 48,
+            weight = FontWeight.Black,
+            align = TextAlign.Center,
+            maxLines = 1,
+        )
+        LcdText(
+            text = "${state.dateText}  ·  ${state.systemStatus.batteryPercent}%",
+            color = theme.lcdInk.copy(alpha = 0.85f),
+            size = 12,
+            weight = FontWeight.Bold,
+            align = TextAlign.Center,
+            maxLines = 1,
+        )
+    }
+
+    // Divider line
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.5.dp)
+            .background(theme.lcdInk.copy(alpha = 0.3f)),
+    )
+
+    Spacer(Modifier.height(6.dp))
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LcdText(
+            text = if (state.pinnedPackages.isEmpty()) "QUICK APPS (HOLD TO PIN)" else "PINNED APPS",
+            color = theme.lcdInk.copy(alpha = 0.75f),
+            size = 10,
+            weight = FontWeight.Bold,
+        )
+        LcdText(
+            text = "ALL APPS (${state.allApps.size}) ▶",
+            color = theme.lcdInk,
+            size = 10,
+            weight = FontWeight.Bold,
+            modifier = Modifier.clickable { controller.openDrawerWithQuery("") },
+        )
+    }
+
+    Spacer(Modifier.height(4.dp))
+
+    // Direct touch favorite/top apps list right on the home screen
+    val homeApps = state.allApps.take(7)
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        itemsIndexed(homeApps, key = { _, app -> app.packageName }) { idx, app ->
+            val isPinned = app.packageName in state.pinnedPackages
+            TouchAppRow(
+                indexNumber = idx + 1,
+                app = app,
+                isPinned = isPinned,
+                isHighlighted = false,
+                theme = theme,
+                onTap = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    controller.launchAppDirect(app)
+                },
+                onLongTap = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    controller.togglePinAppDirect(app)
+                },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ColumnScope.TouchAppDrawerContent(
+    screen: LauncherScreen.AppDrawer,
+    state: LauncherUiState,
+    controller: LauncherController,
+) {
+    val theme = state.theme
+    val haptics = LocalHapticFeedback.current
+
+    // Top T9 Search Filter Header
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(4.dp))
+            .background(theme.lcdInk)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        val title = when {
+            screen.assignDigit != null -> "ASSIGN SPEED KEY ${screen.assignDigit}"
+            screen.t9Query.isEmpty() -> "ALL APPS (${state.filteredApps.size}) · TYPE T9 BELOW"
+            else -> "T9: ${screen.t9Query}_  (${state.filteredApps.size} MATCH)"
+        }
+        LcdText(
+            text = title,
+            color = theme.lcdLit,
+            size = 12,
             weight = FontWeight.Bold,
             modifier = Modifier.weight(1f),
             maxLines = 1,
         )
-        if (state.systemStatus.torchEnabled) StatusTag("[TORCH]", theme)
-        StatusTag(
-            text = when (state.systemStatus.ringerProfile) {
-                RingerProfile.VIBRATE -> "[VIB]"
-                RingerProfile.SILENT -> "[SILENT]"
-                RingerProfile.NORMAL -> "[RING]"
-            },
-            theme = theme,
-        )
-        if (state.isKeypadLocked) StatusTag("[LOCK]", theme)
-    }
-}
-
-@Composable
-private fun StatusTag(text: String, theme: LcdTheme) {
-    LcdText(text, theme.lcdInk, size = 7, weight = FontWeight.Bold, maxLines = 1)
-}
-
-@Composable
-private fun SignalTower(bars: Int, theme: LcdTheme) {
-    Column(
-        modifier = Modifier.width(19.dp).fillMaxHeight().padding(vertical = 7.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        repeat(7) { index ->
-            val isLit = index >= 7 - bars.coerceIn(0, 7)
-            Box(
-                Modifier
-                    .padding(vertical = 1.dp)
-                    .width((8 + index * 1.15f).dp)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(1.dp))
-                    .background(if (isLit) theme.lcdInk else theme.lcdGhost.copy(alpha = 0.47f)),
-            )
-        }
-        Canvas(Modifier.width(17.dp).height(17.dp).padding(top = 2.dp)) {
-            val ink = theme.lcdInk
-            drawLine(ink, Offset(size.width * 0.5f, size.height * 0.2f), Offset(size.width * 0.5f, size.height * 0.95f), 1.2.dp.toPx())
-            drawLine(ink, Offset(size.width * 0.5f, size.height * 0.25f), Offset(size.width * 0.16f, size.height * 0.67f), 1.2.dp.toPx())
-            drawLine(ink, Offset(size.width * 0.5f, size.height * 0.25f), Offset(size.width * 0.84f, size.height * 0.67f), 1.2.dp.toPx())
-            drawLine(ink, Offset(size.width * 0.23f, size.height * 0.72f), Offset(size.width * 0.77f, size.height * 0.72f), 1.2.dp.toPx())
-        }
-    }
-}
-
-@Composable
-private fun BatteryTower(bars: Int, charging: Boolean, theme: LcdTheme) {
-    Column(
-        modifier = Modifier.width(20.dp).fillMaxHeight().padding(vertical = 7.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        repeat(7) { index ->
-            val isLit = index >= 7 - bars.coerceIn(0, 7)
-            Box(
-                Modifier
-                    .padding(vertical = 1.dp)
-                    .width(13.dp)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(1.dp))
-                    .background(if (isLit) theme.lcdInk else theme.lcdGhost.copy(alpha = 0.47f)),
-            )
-        }
-        if (charging) {
-            LcdText("⚡", theme.lcdInk, size = 11, weight = FontWeight.Bold)
-        } else {
-            Spacer(Modifier.height(13.dp))
-        }
-    }
-}
-
-@Composable
-private fun ScreenContent(state: LauncherUiState, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.padding(horizontal = 2.dp, vertical = 1.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        when (val screen = state.screen) {
-            LauncherScreen.Home -> HomeContent(state)
-            is LauncherScreen.MainMenu -> MainMenuContent(screen, state.theme)
-            is LauncherScreen.AppDrawer -> AppDrawerContent(screen, state)
-            is LauncherScreen.AppOptions -> AppOptionsContent(screen, state.theme)
-            is LauncherScreen.Dialer -> DialerContent(screen.digits, state.theme)
-            is LauncherScreen.SnakeGame -> SnakeContent(screen.gameState, state.theme, Modifier.weight(1f).fillMaxWidth())
-            is LauncherScreen.ThemePicker -> ThemePickerContent(screen.selectedIndex, state.theme)
-            is LauncherScreen.SpeedDialManager -> SpeedDialContent(screen.selectedDigit, state)
-            is LauncherScreen.SettingsMenu -> SettingsContent(screen.selectedIndex, state.theme)
-        }
-    }
-}
-
-@Composable
-private fun ColumnScope.HomeContent(state: LauncherUiState) {
-    val theme = state.theme
-    Spacer(Modifier.weight(0.4f))
-    LcdText(state.timeText, theme.lcdInk, size = 30, weight = FontWeight.Bold, align = TextAlign.Center)
-    LcdText(state.dateText.uppercase(), theme.lcdInk, size = 10, weight = FontWeight.Bold)
-    Spacer(Modifier.height(12.dp))
-    LcdText("HOLD 0: TORCH | HOLD #: VIB", theme.lcdInk, size = 7, weight = FontWeight.Medium, align = TextAlign.Center)
-    Spacer(Modifier.weight(0.6f))
-}
-
-@Composable
-private fun ColumnScope.MainMenuContent(screen: LauncherScreen.MainMenu, theme: LcdTheme) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        LcdText("MENU 1-${MainMenuItem.entries.size}", theme.lcdInk, size = 10, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        LcdText(MainMenuItem.entries.getOrNull(screen.selectedIndex)?.code.orEmpty(), theme.lcdInk, size = 8, weight = FontWeight.Bold)
-    }
-    Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
-        MainMenuItem.entries.forEachIndexed { index, item ->
-            SelectableRow(
-                text = "${item.index}. ${item.title}",
-                selected = index == screen.selectedIndex,
-                theme = theme,
-                detail = item.subtitle,
+        if (screen.t9Query.isNotEmpty()) {
+            LcdText(
+                text = "[CLR]",
+                color = theme.lcdLit,
+                size = 11,
+                weight = FontWeight.Bold,
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .clickable { controller.clearT9() },
             )
         }
     }
-}
 
-@Composable
-private fun ColumnScope.AppDrawerContent(screen: LauncherScreen.AppDrawer, state: LauncherUiState) {
-    val theme = state.theme
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        val header = screen.assignDigit?.let { "ASSIGN KEY $it" } ?: "APPS (${state.filteredApps.size})"
-        LcdText(header, theme.lcdInk, size = 10, weight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1)
-    }
-    if (screen.t9Query.isNotEmpty()) {
-        LcdText("T9: ${screen.t9Query}_", theme.lcdInk, size = 9, weight = FontWeight.Bold, modifier = Modifier.fillMaxWidth())
-    }
+    Spacer(Modifier.height(6.dp))
 
     val apps = state.filteredApps
-    val firstVisible = (screen.selectedIndex - 2).coerceIn(0, (apps.size - 5).coerceAtLeast(0))
-    val visibleApps = apps.drop(firstVisible).take(5)
-    Column(Modifier.fillMaxWidth().weight(1f)) {
-        visibleApps.forEachIndexed { index, app ->
-            val actualIndex = firstVisible + index
-            val pinned = app.packageName in state.pinnedPackages
-            SelectableRow(
-                text = "${if (pinned) "*" else " "} ${app.label.take(14)}",
-                selected = actualIndex == screen.selectedIndex,
-                theme = theme,
-            )
+    if (apps.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                LcdText("NO APPS MATCH '${screen.t9Query}'", theme.lcdInk, size = 13, weight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                LcdChip(
+                    text = "DIAL ${screen.t9Query} INSTEAD",
+                    inverted = true,
+                    theme = theme,
+                    onClick = { controller.openDialerDirect(screen.t9Query) },
+                )
+            }
         }
-        if (visibleApps.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                LcdText("NO APPS FOUND", theme.lcdInk, size = 9, weight = FontWeight.Bold)
+    } else {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            itemsIndexed(apps, key = { _, app -> app.packageName }) { index, app ->
+                val isPinned = app.packageName in state.pinnedPackages
+                TouchAppRow(
+                    indexNumber = index + 1,
+                    app = app,
+                    isPinned = isPinned,
+                    isHighlighted = index == 0 && screen.t9Query.isNotEmpty(),
+                    theme = theme,
+                    onTap = {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        controller.launchAppDirect(app)
+                    },
+                    onLongTap = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        controller.togglePinAppDirect(app)
+                    },
+                )
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ColumnScope.AppOptionsContent(screen: LauncherScreen.AppOptions, theme: LcdTheme) {
-    LcdText("OPTIONS: ${screen.app.label.take(12).uppercase()}", theme.lcdInk, size = 9, weight = FontWeight.Bold, maxLines = 1)
-    val options = listOf("1. OPEN APP", "2. PIN / UNPIN TOP", "3. SPEED DIALS", "4. APP INFO")
-    Column(Modifier.fillMaxWidth().weight(1f)) {
-        options.forEachIndexed { index, option ->
-            SelectableRow(option, index == screen.selectedOptionIndex, theme)
+private fun TouchAppRow(
+    indexNumber: Int,
+    app: InstalledApp,
+    isPinned: Boolean,
+    isHighlighted: Boolean,
+    theme: LcdTheme,
+    onTap: () -> Unit,
+    onLongTap: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(4.dp))
+            .background(if (isHighlighted) theme.lcdInk else theme.lcdInk.copy(alpha = 0.08f))
+            .border(
+                width = 1.dp,
+                color = if (isHighlighted) theme.lcdInk else theme.lcdInk.copy(alpha = 0.22f),
+                shape = RoundedCornerShape(4.dp),
+            )
+            .combinedClickable(
+                onClick = onTap,
+                onLongClick = onLongTap,
+            )
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        val fg = if (isHighlighted) theme.lcdLit else theme.lcdInk
+        val pinMark = if (isPinned) "★ " else ""
+        LcdText(
+            text = "${indexNumber.toString().padStart(2, '0')}. $pinMark${app.label.uppercase()}",
+            color = fg,
+            size = 14,
+            weight = FontWeight.Bold,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+        )
+        LcdText(
+            text = if (isHighlighted) "OPEN ↵" else "›",
+            color = fg.copy(alpha = 0.8f),
+            size = 12,
+            weight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun ColumnScope.TouchDialerContent(
+    digits: String,
+    state: LauncherUiState,
+    controller: LauncherController,
+) {
+    val theme = state.theme
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        LcdText("GOBLINS DIALER", theme.lcdInk.copy(alpha = 0.7f), size = 12, weight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .border(1.5.dp, theme.lcdInk, RoundedCornerShape(6.dp))
+                .padding(horizontal = 12.dp, vertical = 16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            LcdText(
+                text = digits.ifEmpty { "TYPE NUMBER BELOW" },
+                color = theme.lcdInk,
+                size = if (digits.isEmpty()) 14 else 28,
+                weight = FontWeight.Black,
+                align = TextAlign.Center,
+                maxLines = 1,
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            LcdChip(
+                text = "☎ CALL NUMBER",
+                inverted = true,
+                theme = theme,
+                onClick = { controller.openDialerDirect(digits) },
+            )
+            LcdChip(
+                text = "⌫ DEL",
+                inverted = false,
+                theme = theme,
+                onClick = controller::backspaceT9,
+            )
+            LcdChip(
+                text = "✕ HOME",
+                inverted = false,
+                theme = theme,
+                onClick = controller::goHome,
+            )
         }
     }
 }
 
 @Composable
-private fun ColumnScope.DialerContent(digits: String, theme: LcdTheme) {
-    Spacer(Modifier.weight(0.7f))
-    LcdText("DIAL NUMBER", theme.lcdInk, size = 10, weight = FontWeight.Bold)
-    Spacer(Modifier.height(14.dp))
-    LcdText(digits.ifEmpty { "_" }, theme.lcdInk, size = 22, weight = FontWeight.Bold, align = TextAlign.Center, maxLines = 1)
-    Spacer(Modifier.weight(1f))
-}
-
-@Composable
-private fun ColumnScope.SnakeContent(gameState: com.goblins.launcher1280.analysis.SnakeState, theme: LcdTheme, modifier: Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        LcdText("SCORE: ${gameState.score}  HI: ${gameState.highScore}", theme.lcdInk, size = 9, weight = FontWeight.Bold, maxLines = 1)
-        Box(Modifier.fillMaxSize().padding(vertical = 3.dp), contentAlignment = Alignment.Center) {
+private fun ColumnScope.TouchSnakeContent(
+    gameState: com.goblins.launcher1280.analysis.SnakeState,
+    theme: LcdTheme,
+    controller: LauncherController,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LcdText(
+                text = "SNAKE · SCORE ${gameState.score} (HI ${gameState.highScore})",
+                color = theme.lcdInk,
+                size = 11,
+                weight = FontWeight.Bold,
+            )
+            LcdChip(
+                text = if (gameState.isGameOver) "RETRY" else if (gameState.isPaused) "RESUME" else "PAUSE",
+                inverted = true,
+                theme = theme,
+                onClick = controller::toggleSnakePauseOrRestart,
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        val (dx, dy) = dragAmount
+                        if (abs(dx) > 12f || abs(dy) > 12f) {
+                            if (abs(dx) > abs(dy)) {
+                                controller.steerSnakeDirect(if (dx > 0) Direction.RIGHT else Direction.LEFT)
+                            } else {
+                                controller.steerSnakeDirect(if (dy > 0) Direction.DOWN else Direction.UP)
+                            }
+                        }
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
             Canvas(Modifier.fillMaxSize()) {
                 val cellWidth = size.width / gameState.width.coerceAtLeast(1)
                 val cellHeight = size.height / gameState.height.coerceAtLeast(1)
@@ -417,8 +685,9 @@ private fun ColumnScope.SnakeContent(gameState: com.goblins.launcher1280.analysi
                 val boardHeight = cell * gameState.height
                 val left = (size.width - boardWidth) / 2f
                 val top = (size.height - boardHeight) / 2f
+
                 drawRect(
-                    color = theme.lcdInk.copy(alpha = 0.16f),
+                    color = theme.lcdInk.copy(alpha = 0.10f),
                     topLeft = Offset(left, top),
                     size = Size(boardWidth, boardHeight),
                 )
@@ -426,111 +695,241 @@ private fun ColumnScope.SnakeContent(gameState: com.goblins.launcher1280.analysi
                     color = theme.lcdInk,
                     topLeft = Offset(left, top),
                     size = Size(boardWidth, boardHeight),
-                    style = Stroke(width = 1.2.dp.toPx()),
+                    style = Stroke(width = 1.5.dp.toPx()),
                 )
-                for (x in 1 until gameState.width) {
-                    val xPosition = left + x * cell
-                    drawLine(theme.lcdInk.copy(alpha = 0.18f), Offset(xPosition, top), Offset(xPosition, top + boardHeight), 0.45.dp.toPx())
-                }
-                for (y in 1 until gameState.height) {
-                    val yPosition = top + y * cell
-                    drawLine(theme.lcdInk.copy(alpha = 0.18f), Offset(left, yPosition), Offset(left + boardWidth, yPosition), 0.45.dp.toPx())
-                }
                 gameState.snake.forEach { point ->
                     drawRoundRect(
                         color = theme.lcdInk,
-                        topLeft = Offset(left + point.x * cell + 0.6.dp.toPx(), top + point.y * cell + 0.6.dp.toPx()),
-                        size = Size((cell - 1.2.dp.toPx()).coerceAtLeast(1f), (cell - 1.2.dp.toPx()).coerceAtLeast(1f)),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.dp.toPx()),
+                        topLeft = Offset(left + point.x * cell + 1f, top + point.y * cell + 1f),
+                        size = Size((cell - 2f).coerceAtLeast(2f), (cell - 2f).coerceAtLeast(2f)),
+                        cornerRadius = CornerRadius(2f),
                     )
                 }
                 drawCircle(
                     color = theme.lcdInk,
-                    radius = (cell * 0.33f).coerceAtLeast(1f),
+                    radius = (cell * 0.38f).coerceAtLeast(2f),
                     center = Offset(left + (gameState.food.x + 0.5f) * cell, top + (gameState.food.y + 0.5f) * cell),
                 )
             }
             if (gameState.isGameOver || gameState.isPaused) {
                 Box(
-                    Modifier
-                        .clip(RoundedCornerShape(2.dp))
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
                         .background(theme.lcdInk)
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                        .clickable { controller.toggleSnakePauseOrRestart() }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                 ) {
-                    LcdText(if (gameState.isGameOver) "GAME OVER" else "PAUSED", theme.lcdLit, size = 10, weight = FontWeight.Bold)
+                    LcdText(
+                        text = if (gameState.isGameOver) "GAME OVER · TAP TO RETRY" else "PAUSED · TAP TO RESUME",
+                        color = theme.lcdLit,
+                        size = 12,
+                        weight = FontWeight.Bold,
+                    )
                 }
             }
         }
+        Spacer(Modifier.height(4.dp))
+        LcdText(
+            text = "SWIPE BOARD OR TAP 2 / 4 / 6 / 8 TO STEER",
+            color = theme.lcdInk.copy(alpha = 0.75f),
+            size = 9,
+            weight = FontWeight.Bold,
+            align = TextAlign.Center,
+        )
     }
 }
 
 @Composable
-private fun ColumnScope.ThemePickerContent(selectedIndex: Int, theme: LcdTheme) {
-    LcdText("LCD DISPLAY", theme.lcdInk, size = 10, weight = FontWeight.Bold)
-    Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
-        LcdTheme.entries.forEachIndexed { index, entry ->
-            SelectableRow(entry.displayName.uppercase(), index == selectedIndex, theme)
-        }
-    }
-}
-
-@Composable
-private fun ColumnScope.SpeedDialContent(selectedDigit: Int, state: LauncherUiState) {
-    LcdText("SPEED DIALS", state.theme.lcdInk, size = 10, weight = FontWeight.Bold)
-    Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
-        (2..9).forEach { digit ->
-            val assignedPackage = state.speedDials[digit]
-            val appLabel = state.allApps.firstOrNull { it.packageName == assignedPackage }?.label ?: "-- EMPTY --"
-            SelectableRow("$digit. ${appLabel.take(12)}", digit == selectedDigit, state.theme)
-        }
-    }
-}
-
-@Composable
-private fun ColumnScope.SettingsContent(selectedIndex: Int, theme: LcdTheme) {
-    LcdText("PHONE SETUP", theme.lcdInk, size = 10, weight = FontWeight.Bold)
-    val settings = listOf("1. SET DEFAULT HOME", "2. RELOAD APPS", "3. CHANGE BANNER", "4. LOCK KEYPAD")
-    Column(Modifier.fillMaxWidth().weight(1f)) {
-        settings.forEachIndexed { index, setting ->
-            SelectableRow(setting, index == selectedIndex, theme)
-        }
-    }
-}
-
-@Composable
-private fun SelectableRow(text: String, selected: Boolean, theme: LcdTheme, detail: String? = null) {
-    Row(
+private fun ColumnScope.TouchSettingsContent(
+    state: LauncherUiState,
+    controller: LauncherController,
+) {
+    val theme = state.theme
+    LcdText("GOBLINS 1280 SETUP", theme.lcdInk, size = 14, weight = FontWeight.Black)
+    Spacer(Modifier.height(8.dp))
+    val actions: List<Pair<String, () -> Unit>> = listOf(
+        "1. SET AS DEFAULT HOME LAUNCHER" to controller::openDefaultHomeDirect,
+        "2. CYCLE LCD BACKLIGHT (${theme.displayName.uppercase()})" to controller::cycleThemeDirect,
+        "3. CYCLE CARRIER BANNER (${state.systemStatus.carrierLabel})" to controller::cycleCarrierDirect,
+        "4. MANAGE SPEED DIAL KEYS (2-9)" to { controller.onKeyPress(com.goblins.launcher1280.model.KeypadKey.Digit(5, "")) },
+        "5. PLAY SNAKE XENZIA" to controller::openSnakeDirect,
+        "6. RELOAD INSTALLED APPS (${state.allApps.size})" to controller::refreshApps,
+    )
+    LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(2.dp))
-            .background(if (selected) theme.lcdInk else Color.Transparent)
-            .padding(horizontal = 3.dp, vertical = if (detail == null) 3.dp else 1.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .weight(1f),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Column(Modifier.weight(1f)) {
-            LcdText(
-                text = text,
-                color = if (selected) theme.lcdLit else theme.lcdInk,
-                size = if (detail == null) 9 else 8,
-                weight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                maxLines = 1,
-            )
-            detail?.let {
-                LcdText(it, if (selected) theme.lcdLit.copy(alpha = 0.8f) else theme.lcdInk.copy(alpha = 0.75f), size = 6, maxLines = 1)
+        itemsIndexed(actions) { _, (label, action) ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(theme.lcdInk.copy(alpha = 0.1f))
+                    .border(1.dp, theme.lcdInk.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                    .clickable(onClick = action)
+                    .padding(horizontal = 10.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                LcdText(label, theme.lcdInk, size = 13, weight = FontWeight.Bold, maxLines = 1)
             }
         }
     }
 }
 
 @Composable
-private fun SoftKeyRow(state: LauncherUiState) {
-    Row(
-        modifier = Modifier.fillMaxWidth().height(21.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+private fun ColumnScope.TouchSpeedDialContent(
+    state: LauncherUiState,
+    controller: LauncherController,
+) {
+    val theme = state.theme
+    LcdText("SPEED DIAL KEYS (HOLD 2-9)", theme.lcdInk, size = 13, weight = FontWeight.Black)
+    Spacer(Modifier.height(6.dp))
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        LcdText(state.leftSoftKeyLabel.uppercase(), state.theme.lcdInk, size = 9, weight = FontWeight.Bold)
-        LcdText(state.rightSoftKeyLabel.uppercase(), state.theme.lcdInk, size = 9, weight = FontWeight.Bold)
+        itemsIndexed((2..9).toList()) { _, digit ->
+            val pkg = state.speedDials[digit]
+            val appName = state.allApps.firstOrNull { it.packageName == pkg }?.label ?: "TAP TO ASSIGN APP"
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(theme.lcdInk.copy(alpha = 0.09f))
+                    .border(1.dp, theme.lcdInk.copy(alpha = 0.25f), RoundedCornerShape(4.dp))
+                    .clickable { controller.openDrawerWithQuery(assignDigit = digit) }
+                    .padding(horizontal = 10.dp, vertical = 9.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                LcdText("KEY $digit  →  ${appName.uppercase()}", theme.lcdInk, size = 13, weight = FontWeight.Bold, maxLines = 1)
+                LcdText("SET ›", theme.lcdInk, size = 11, weight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BottomTouchActionStrip(
+    state: LauncherUiState,
+    controller: LauncherController,
+) {
+    val theme = state.theme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, theme.lcdInk.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LcdChip(
+            text = if (state.screen == LauncherScreen.Home) "☰ APPS" else "⌂ HOME",
+            inverted = state.screen != LauncherScreen.Home,
+            theme = theme,
+            onClick = {
+                if (state.screen == LauncherScreen.Home) controller.openDrawerWithQuery("") else controller.goHome()
+            },
+        )
+        LcdChip(
+            text = "☎ DIAL",
+            inverted = state.screen is LauncherScreen.Dialer,
+            theme = theme,
+            onClick = { controller.openDialerScreen() },
+        )
+        LcdChip(
+            text = "🐍 SNAKE",
+            inverted = state.screen is LauncherScreen.SnakeGame,
+            theme = theme,
+            onClick = controller::openSnakeDirect,
+        )
+        LcdChip(
+            text = "⚙ SETUP",
+            inverted = state.screen is LauncherScreen.SettingsMenu,
+            theme = theme,
+            onClick = controller::openSettingsDirect,
+        )
+    }
+}
+
+@Composable
+private fun LcdChip(
+    text: String,
+    inverted: Boolean,
+    theme: LcdTheme,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(3.dp))
+            .background(if (inverted) theme.lcdInk else Color.Transparent)
+            .border(1.dp, theme.lcdInk, RoundedCornerShape(3.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 7.dp, vertical = 3.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        LcdText(
+            text = text,
+            color = if (inverted) theme.lcdLit else theme.lcdInk,
+            size = 10,
+            weight = FontWeight.Bold,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun SignalTower(bars: Int, theme: LcdTheme) {
+    Column(
+        modifier = Modifier
+            .width(14.dp)
+            .fillMaxHeight()
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        repeat(7) { index ->
+            val isLit = index >= 7 - bars.coerceIn(0, 7)
+            Box(
+                Modifier
+                    .weight(1f)
+                    .padding(vertical = 2.dp)
+                    .width((6 + (6 - index)).dp)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(if (isLit) theme.lcdInk else theme.lcdInk.copy(alpha = 0.16f)),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BatteryTower(bars: Int, percent: Int, charging: Boolean, theme: LcdTheme) {
+    Column(
+        modifier = Modifier
+            .width(14.dp)
+            .fillMaxHeight()
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        if (charging) {
+            LcdText("⚡", theme.lcdInk, size = 10, weight = FontWeight.Bold)
+        }
+        repeat(7) { index ->
+            val isLit = index >= 7 - bars.coerceIn(0, 7)
+            Box(
+                Modifier
+                    .weight(1f)
+                    .padding(vertical = 2.dp)
+                    .width(10.dp)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(if (isLit) theme.lcdInk else theme.lcdInk.copy(alpha = 0.16f)),
+            )
+        }
     }
 }
 

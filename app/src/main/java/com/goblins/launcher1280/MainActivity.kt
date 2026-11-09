@@ -8,8 +8,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
-import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,9 +16,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import com.goblins.launcher1280.model.LauncherController
 import com.goblins.launcher1280.model.LauncherScreen
 import com.goblins.launcher1280.ui.GoblinsKeypadAssembly
@@ -86,42 +85,28 @@ class MainActivity : ComponentActivity() {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF141816),
-                                Color(0xFF0E1210),
-                                Color(0xFF090B0A),
-                            )
-                        )
-                    )
+                    .background(Color(0xFF0A0D0B))
                     .navigationBarsPadding()
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
             ) {
                 GoblinsLcdAssembly(
                     state = state,
+                    controller = controller,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(0.46f),
+                        .weight(0.72f),
                 )
 
                 GoblinsKeypadAssembly(
+                    theme = state.theme,
                     onKeyPress = controller::onKeyPress,
                     onKeyLongPress = controller::onKeyLongPress,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(0.54f)
-                        .padding(top = 8.dp),
+                        .weight(0.28f)
+                        .padding(top = 6.dp),
                 )
             }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (::controller.isInitialized) {
-            controller.refreshClockAndStatus()
-            controller.refreshApps()
         }
     }
 
@@ -131,5 +116,13 @@ class MainActivity : ComponentActivity() {
             controller.release()
         }
         super.onDestroy()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::controller.isInitialized) {
+            controller.refreshClockAndStatus()
+            controller.refreshApps()
+        }
     }
 }
